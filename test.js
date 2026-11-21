@@ -58,6 +58,16 @@ assert.strictEqual(m.exports.scale(20), 1)
 assert.strictEqual(m.exports.scale(100), 1)
 assert.ok(m.exports.scale(0.7) > 0.3 && m.exports.scale(0.7) < 0.5)
 assert.ok(m.exports.scale(m.exports.MODERATE) < m.exports.scale(m.exports.HEAVY))
+// Place search: only NL/BE results (Buienradar covers nothing else).
+const geo = JSON.stringify({ results: [
+  { name: "Utrecht", admin1: "Utrecht", country: "Netherlands", country_code: "NL", latitude: 52.0908, longitude: 5.1222 },
+  { name: "Utrecht", admin1: "KwaZulu-Natal", country: "South Africa", country_code: "ZA", latitude: -27.65, longitude: 30.32 },
+  { name: "Gent", admin1: "Flanders", country: "Belgium", country_code: "BE", latitude: 51.05, longitude: 3.72 },
+] })
+assert.deepStrictEqual(m.exports.parsePlaces(geo).map(p => p.description), ["Utrecht, Netherlands", "Flanders, Belgium"])
+assert.strictEqual(m.exports.parsePlaces(geo)[0].latitude, 52.0908)
+assert.deepStrictEqual(m.exports.parsePlaces("{}"), [])
+assert.deepStrictEqual(m.exports.parsePlaces("not json"), [])
 // Night versions: doubled letter.
 assert.notStrictEqual(condition("bb.png").glyph, condition("b.png").glyph)
 assert.strictEqual(condition("cc.png").text, "Overcast")

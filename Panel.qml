@@ -117,6 +117,66 @@ Panel {
     onTriggered: root.refresh()
   }
 
+  // A new location refetches once both coordinates have changed.
+  readonly property string locationKey: latitude + "," + longitude
+  onLocationKeyChanged: locationChange.restart()
+  Timer { id: locationChange; interval: 300; onTriggered: root.refresh() }
+
+  // ---- Place search: click the place name, type, pick a suggestion.
+  property bool editing: false
+  property var places: []
+  property int placeIndex: 0
+
+  function startEditing() {
+    editing = true
+    places = []
+    placeIndex = 0
+    Qt.callLater(function() { placeField.text = root.placeName; placeField.selectAll(); placeField.forceActiveFocus() })
+  }
+
+  function stopEditing() {
+    editing = false
+    places = []
+    Qt.callLater(function() { keyCatcher.forceActiveFocus() })
+  }
+
+  // Saves to this widget's shell.json entry, like the bar's own widgets do.
+  function pickPlace(p) {
+    if (!p || !root.bar || !root.bar.shell || typeof root.bar.shell.updateEntryInline !== "function") return
+    var entry = { id: root.moduleName }
+    for (var key in root.settings) if (key !== "id") entry[key] = root.settings[key]
+    entry.latitude = p.latitude
+    entry.longitude = p.longitude
+    entry.place = p.name
+    root.points = []
+    root.bar.shell.updateEntryInline(root.moduleName, entry)
+    stopEditing()
+  }
+
+  Timer {
+    id: placeDebounce
+    interval: 300
+    onTriggered: {
+      var q = placeField.text.trim()
+      if (q.length < 2) { root.places = []; return }
+      if (placeProc.running) { restart(); return }
+      placeProc.command = ["curl", "-fsS", "--max-time", "5",
+        "https://geocoding-api.open-meteo.com/v1/search?count=10&language=en&format=json&name=" + encodeURIComponent(q)]
+      placeProc.running = true
+    }
+  }
+
+  Process {
+    id: placeProc
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        root.places = root.editing ? Model.parsePlaces(text) : []
+        root.placeIndex = 0
+      }
+    }
+  }
+
   component Label: Text {
     color: root.fg
     font.family: root.bar ? root.bar.fontFamily : ""
@@ -144,6 +204,7 @@ Panel {
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
+      blocked: root.editing
       onCloseRequested: root.close()
       onTabRequested: function(direction) { root.switchPanel(direction) }
 
@@ -177,9 +238,33 @@ Panel {
               anchors.verticalCenter: parent.verticalCenter
               spacing: Style.space(6)
               Label {
+                visible: !root.editing
                 anchors.right: parent.right
-                text: [root.placeName, root.weather ? root.weather.now.text : ""].filter(Boolean).join(" · ").toUpperCase()
+                text: [root.placeName || "Set location", root.weather ? root.weather.now.text : ""].filter(Boolean).join(" · ").toUpperCase()
                 font.letterSpacing: 1
+                MouseArea {
+                  anchors.fill: parent
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: root.startEditing()
+                }
+              }
+              TextField {
+                id: placeField
+                visible: root.editing
+                anchors.right: parent.right
+                width: Style.space(220)
+                placeholderText: "Search place (NL/BE)"
+                foreground: root.fg
+                font.family: root.bar ? root.bar.fontFamily : ""
+                onTextChanged: if (root.editing) placeDebounce.restart()
+                Keys.onPressed: function(event) {
+                  if (event.key === Qt.Key_Escape) root.stopEditing()
+                  else if (event.key === Qt.Key_Down) root.placeIndex = Math.min(root.placeIndex + 1, root.places.length - 1)
+                  else if (event.key === Qt.Key_Up) root.placeIndex = Math.max(root.placeIndex - 1, 0)
+                  else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) root.pickPlace(root.places[root.placeIndex])
+                  else return
+                  event.accepted = true
+                }
               }
               Row {
                 anchors.right: parent.right
@@ -187,6 +272,39 @@ Panel {
                 Stat { name: "FEELS"; value: root.weather ? root.weather.now.feels : "" }
                 Stat { name: "WIND"; value: root.weather ? root.weather.now.wind : "" }
                 Stat { name: "HUMID"; value: root.weather ? root.weather.now.humidity : "" }
+              }
+            }
+          }
+
+          // ---- Place suggestions while searching.
+          Column {
+            width: parent.width
+            visible: root.editing && root.places.length > 0
+            Repeater {
+              model: root.places
+              Rectangle {
+                required property var modelData
+                required property int index
+                width: parent.width
+                height: placeRow.implicitHeight + Style.space(12)
+                radius: Style.cornerRadius
+                color: index === root.placeIndex ? Style.hoverFillFor(root.fg, Commons.Color.accent) : "transparent"
+                Row {
+                  id: placeRow
+                  anchors.left: parent.left
+                  anchors.leftMargin: Style.space(12)
+                  anchors.verticalCenter: parent.verticalCenter
+                  spacing: Style.space(8)
+                  Label { text: modelData.name }
+                  Label { text: modelData.description; color: root.dim; font.pixelSize: Style.font.bodySmall; anchors.verticalCenter: parent.verticalCenter }
+                }
+                MouseArea {
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  onPositionChanged: root.placeIndex = index
+                  onClicked: root.pickPlace(modelData)
+                }
               }
             }
           }
@@ -264,13 +382,14 @@ Panel {
                 ctx.fillStyle = Commons.Color.accent
                 ctx.fillRect(0, 0, 2, height)
 
-                // Level names, each just above the line where it starts.
+                // Level names, each centred in its own band.
                 ctx.font = Style.font.caption + "px \"" + (root.bar ? root.bar.fontFamily : "monospace") + "\""
                 ctx.fillStyle = root.dim
                 ctx.textAlign = "right"
-                ctx.fillText("light", width - 2, height - 8)
-                ctx.fillText("moderate", width - 2, y(Model.MODERATE) - 4)
-                ctx.fillText("heavy", width - 2, y(Model.HEAVY) - 4)
+                ctx.textBaseline = "middle"
+                ctx.fillText("light", width - 2, (y(0.1) + y(Model.MODERATE)) / 2)
+                ctx.fillText("moderate", width - 2, (y(Model.MODERATE) + y(Model.HEAVY)) / 2)
+                ctx.fillText("heavy", width - 2, (y(Model.HEAVY) + 4) / 2)
               }
             }
 

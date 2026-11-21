@@ -140,4 +140,19 @@ function parseFeed(raw, lat, lon, todayIso) {
   }
 }
 
-if (typeof module !== "undefined") module.exports = { parseRainText: parseRainText, summary: summary, scale: scale, MODERATE: MODERATE, HEAVY: HEAVY, condition: condition, windText: windText, parseFeed: parseFeed }
+// Open-Meteo geocoding response -> place suggestions in the Netherlands and Belgium.
+function parsePlaces(raw) {
+  var data
+  try { data = JSON.parse(raw) } catch (e) { return [] }
+  return ((data && data.results) || []).filter(function (r) {
+    return (r.country_code === "NL" || r.country_code === "BE") && r.latitude !== undefined && r.longitude !== undefined
+  }).map(function (r) {
+    return {
+      name: String(r.name),
+      description: [r.admin1, r.country].filter(Boolean).join(", "),
+      latitude: r.latitude, longitude: r.longitude
+    }
+  })
+}
+
+if (typeof module !== "undefined") module.exports = { parseRainText: parseRainText, summary: summary, scale: scale, parsePlaces: parsePlaces, MODERATE: MODERATE, HEAVY: HEAVY, condition: condition, windText: windText, parseFeed: parseFeed }
