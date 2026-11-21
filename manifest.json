@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "buienradar.rain",
+  "name": "Buienradar Rain",
+  "version": "0.1.0",
+  "author": "neotyk",
+  "description": "Rain for the next 2 hours with graph and animated radar map (Buienradar, NL/BE only)",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Buienradar Rain",
+    "description": "Rain for the next 2 hours with graph and radar map",
+    "category": "Info",
+    "allowMultiple": false
+  }
+}
