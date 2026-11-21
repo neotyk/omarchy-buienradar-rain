@@ -426,8 +426,7 @@ Panel {
                 x: idx * parent.width / (root.points.length - 1) - width / 2
                 width: 2
                 height: parent.height
-                color: root.fg
-                opacity: 0.6
+                color: Commons.Color.accent
               }
             }
 
