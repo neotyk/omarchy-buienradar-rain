@@ -149,9 +149,11 @@ Panel {
 
       Row {
         id: content
+        width: parent.width
         spacing: Style.space(20)
 
         Column {
+          id: left
           width: Style.space(500)
           spacing: Style.space(16)
 
@@ -290,9 +292,11 @@ Panel {
           spacing: Style.space(10)
           AnimatedImage {
             id: radar
-            width: Style.space(526)
-            height: Style.space(500)
+            // Fill whatever width the popup has left; crop, never spill.
+            width: content.width - left.width - content.spacing
+            height: Math.round(width * 500 / 526)
             fillMode: Image.PreserveAspectCrop
+            clip: true
             playing: root.opened
             cache: false
           }
