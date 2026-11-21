@@ -7,7 +7,7 @@ import qs.Ui
 // Wiring follows Omarchy's own omarchy.weather bar widget.
 BarWidget {
   id: root
-  moduleName: "buienradar.rain"
+  moduleName: "io.github.neotyk.buienradar-rain"
 
   function injectPanel() {
     var target = panelLoader.item

@@ -26,7 +26,7 @@ To drop the standard weather widget, remove `omarchy.weather` from the bar in
 ## Remove
 
 ```bash
-omarchy plugin remove buienradar.rain
+omarchy plugin remove io.github.neotyk.buienradar-rain
 ```
 
 ## Dependencies

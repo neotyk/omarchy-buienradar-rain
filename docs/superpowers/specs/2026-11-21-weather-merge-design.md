@@ -2,7 +2,7 @@
 
 ## Why
 The user wants one weather item in the bar. The standard `omarchy.weather` widget has a nice
-"now" row and useful data. Our `buienradar.rain` widget has the rain graph and radar map.
+"now" row and useful data. Our `io.github.neotyk.buienradar-rain` widget has the rain graph and radar map.
 Merge them by growing our widget, so we keep one small plugin and no fork of Omarchy code.
 
 ## Goals

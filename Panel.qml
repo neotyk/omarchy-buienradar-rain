@@ -11,8 +11,8 @@ import "Model.js" as Model
 // Lifecycle code follows Omarchy's own omarchy.weather panel.
 Panel {
   id: root
-  moduleName: "buienradar.rain"
-  ipcTarget: "buienradar.rain"
+  moduleName: "io.github.neotyk.buienradar-rain"
+  ipcTarget: "io.github.neotyk.buienradar-rain"
 
   property var anchorItem: null
   property var hostWidget: null

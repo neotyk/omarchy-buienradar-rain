@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Grow `buienradar.rain` into one weather + rain widget laid out as design F.
+**Goal:** Grow `io.github.neotyk.buienradar-rain` into one weather + rain widget laid out as design F.
 **Architecture:** Pure data functions in `Model.js` (tested with `node test.js`); `Panel.qml` fetches the Buienradar feed, raintext and radar GIF and renders two columns; `BarWidget.qml` shows the pill.
 **Tech Stack:** Quickshell QML, plain JS, curl.
 **Spec:** `docs/superpowers/specs/2026-11-21-weather-merge-design.md`
