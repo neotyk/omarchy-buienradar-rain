@@ -146,8 +146,6 @@ Panel {
 
   function startEditing() {
     editing = true
-    places = []
-    placeIndex = 0
     Qt.callLater(function() { placeField.text = root.placeName; placeField.selectAll(); placeField.forceActiveFocus() })
   }
 
@@ -160,14 +158,10 @@ Panel {
 
   // Saves to this widget's shell.json entry, like the bar's own widgets do.
   function pickPlace(p) {
-    if (!p || !root.bar || !root.bar.shell || typeof root.bar.shell.updateEntryInline !== "function") return
-    var entry = { id: root.moduleName }
-    for (var key in root.settings) if (key !== "id") entry[key] = root.settings[key]
-    entry.latitude = p.latitude
-    entry.longitude = p.longitude
-    entry.place = p.name
+    if (!p || !root.bar) return
     root.points = []
-    root.bar.shell.updateEntryInline(root.moduleName, entry)
+    root.bar.shell.updateEntryInline(root.moduleName,
+      Object.assign({}, root.settings, { id: root.moduleName, latitude: p.latitude, longitude: p.longitude, place: p.name }))
     stopEditing()
   }
 
