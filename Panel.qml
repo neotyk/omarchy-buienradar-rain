@@ -27,6 +27,8 @@ Panel {
   readonly property real longitude: parseFloat(setting("longitude", 4.89))
   readonly property string placeName: setting("place", "")
   readonly property string radarPath: Quickshell.env("XDG_RUNTIME_DIR") + "/buienradar-radar.gif"
+  readonly property int radarHistory: 3   // past radar frames, 10 minutes each
+  property string radarUrl: ""            // final GIF URL; it holds the frame times
 
   property var points: []
   property real pointsAt: 0    // when points last arrived (ms)
@@ -109,10 +111,15 @@ Panel {
   Process {
     id: radarProc
     // Own temp file per run, so two instances during a hot reload never share one.
-    command: ["sh", "-c", "t=$(mktemp \"$1.XXXXXX\") && curl -fsSL --max-time 20 -o \"$t\" \"$2\" && [ -s \"$t\" ] && mv \"$t\" \"$1\" || { rm -f \"$t\"; exit 1; }",
+    // Prints the final URL (after redirects) only when the new file is in place.
+    command: ["sh", "-c", "t=$(mktemp \"$1.XXXXXX\") && u=$(curl -fsSL --max-time 20 -w '%{url_effective}' -o \"$t\" \"$2\") && [ -s \"$t\" ] && mv \"$t\" \"$1\" && echo \"$u\" || { rm -f \"$t\"; exit 1; }",
       "sh", root.radarPath,
       "https://image.buienradar.nl/2.0/image/animation/RadarMapRainNL"
-      + "?height=512&width=500&renderBackground=True&renderBranding=False&renderText=True&history=3&forecast=24"]
+      + "?height=512&width=500&renderBackground=True&renderBranding=False&renderText=True&history=" + root.radarHistory + "&forecast=24"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: if (text.trim()) root.radarUrl = text.trim()
+    }
     onExited: function(code) {
       if (code !== 0) return
       // Stop the animation before swapping files; set the new one on the next tick.
@@ -359,13 +366,15 @@ Panel {
           }
 
           Column {
+            id: graphBlock
             width: parent.width
             spacing: Style.space(6)
 
             Canvas {
               id: graph
               width: parent.width
-              height: Style.space(120)
+              // Fill the left column down to the bottom of the radar column.
+              height: Math.max(Style.space(120), radarColumn.height - graphBlock.y - graphBlock.spacing - axis.height)
               // Repaint when the data or the theme colors change.
               readonly property var watch: [root.points, root.fg, root.dim, Commons.Color.accent]
               onWatchChanged: requestPaint()
@@ -407,9 +416,23 @@ Panel {
                 ctx.fillText("moderate", width - 2, (y(Model.MODERATE) + y(Model.HEAVY)) / 2)
                 ctx.fillText("heavy", width - 2, (y(Model.HEAVY) + 4) / 2)
               }
+
+              // Time of the radar frame on screen; hidden when that time is off the graph.
+              Rectangle {
+                id: cursor
+                readonly property string time: Model.frameTime(root.radarUrl, root.radarHistory, radar.currentFrame)
+                readonly property int idx: root.points.findIndex(function (p) { return p.time === cursor.time })
+                visible: idx >= 0
+                x: idx * parent.width / (root.points.length - 1) - width / 2
+                width: 2
+                height: parent.height
+                color: root.fg
+                opacity: 0.6
+              }
             }
 
             Item {
+              id: axis
               width: parent.width
               height: Style.space(14)
               Repeater {
@@ -429,6 +452,7 @@ Panel {
 
         // ---- Radar map.
         Column {
+          id: radarColumn
           spacing: Style.space(10)
           AnimatedImage {
             id: radar
