@@ -63,4 +63,68 @@ function capitalize(s) {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : s
 }
 
-if (typeof module !== "undefined") module.exports = { parseRainText: parseRainText, summary: summary, runs: runs }
+// Buienradar icon letter -> English word + Nerd Font (Material) weather glyph.
+// A doubled letter ("aa.png") is the night version.
+var CONDITIONS = {
+  a: ["Clear", 0xf0599], b: ["Partly cloudy", 0xf0595], j: ["Partly cloudy", 0xf0595],
+  o: ["Partly cloudy", 0xf0595], r: ["Partly cloudy", 0xf0595], c: ["Overcast", 0xf0590],
+  p: ["Overcast", 0xf0590], d: ["Fog", 0xf0591], n: ["Fog", 0xf0591], f: ["Showers", 0xf0597],
+  h: ["Showers", 0xf0597], k: ["Light rain", 0xf0597], l: ["Rain", 0xf0596], m: ["Light rain", 0xf0597],
+  q: ["Rain", 0xf0596], g: ["Thunder", 0xf0593], s: ["Thunder", 0xf0593], i: ["Snow", 0xf0598],
+  t: ["Snow", 0xf0598], u: ["Snow", 0xf0598], v: ["Snow", 0xf0598], w: ["Sleet", 0xf067f]
+}
+
+function condition(iconUrl) {
+  var code = (String(iconUrl || "").match(/([a-z]+)\.png$/) || [])[1] || ""
+  var c = CONDITIONS[code.charAt(code.length - 1)] || ["", 0xf0590]
+  var night = code.length > 1 && code.charAt(0) === "a"
+  return { text: c[0], glyph: String.fromCodePoint(night ? 0xf0594 : c[1]) }
+}
+
+function windText(ms, dir) {
+  var d = String(dir || "").replace(/Z/g, "S").replace(/O/g, "E")
+  return (d ? d + " " : "") + Math.round(ms * 3.6) + " km/h"
+}
+
+function deg(v) {
+  return v === null || v === undefined || v === "" || isNaN(v) ? "—" : Math.round(v) + "°"
+}
+
+var WEEKDAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"]
+
+// The feed's "now" from the station nearest to lat/lon, plus the next 3 days after today.
+function parseFeed(raw, lat, lon, todayIso) {
+  var feed
+  try { feed = JSON.parse(raw) } catch (e) { return null }
+  var stations = feed && feed.actual && feed.actual.stationmeasurements
+  if (!stations || !stations.length) return null
+  var k = Math.cos(lat * Math.PI / 180)
+  var st = stations.filter(function (s) { return s.temperature !== undefined && s.temperature !== null })
+    .sort(function (a, b) {
+      return Math.pow(a.lat - lat, 2) + Math.pow((a.lon - lon) * k, 2) - Math.pow(b.lat - lat, 2) - Math.pow((b.lon - lon) * k, 2)
+    })[0]
+  if (!st) return null
+  var c = condition(st.iconurl)
+  var days = ((feed.forecast && feed.forecast.fivedayforecast) || [])
+    .filter(function (d) { return String(d.day).slice(0, 10) > todayIso })
+    .slice(0, 3)
+    .map(function (d) {
+      var date = String(d.day).slice(0, 10).split("-")
+      return {
+        name: WEEKDAYS[new Date(Date.UTC(+date[0], date[1] - 1, +date[2])).getUTCDay()],
+        hi: deg(d.maxtemperature), lo: deg(d.mintemperature),
+        rain: "rain " + (d.rainChance || 0) + "%", glyph: condition(d.iconurl).glyph
+      }
+    })
+  return {
+    now: {
+      temp: deg(st.temperature), feels: deg(st.feeltemperature),
+      wind: windText(st.windspeed || 0, st.winddirection),
+      humidity: st.humidity === null || st.humidity === undefined ? "—" : Math.round(st.humidity) + "%",
+      text: c.text, glyph: c.glyph
+    },
+    days: days
+  }
+}
+
+if (typeof module !== "undefined") module.exports = { parseRainText: parseRainText, summary: summary, runs: runs, condition: condition, windText: windText, parseFeed: parseFeed }

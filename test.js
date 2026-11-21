@@ -3,7 +3,34 @@ const assert = require("assert")
 const fs = require("fs")
 // Model.js starts with QML's ".pragma library"; strip it so node can load the file.
 const src = fs.readFileSync(__dirname + "/Model.js", "utf8").replace(".pragma library", "")
-const m = {}; new Function("module", src)(m); const { parseRainText, summary } = m.exports
+const m = {}; new Function("module", src)(m); const { parseRainText, summary, condition, windText, parseFeed } = m.exports
+
+// Weather feed
+assert.strictEqual(condition("https://x/30x30/c.png").text, "Overcast")
+assert.notStrictEqual(condition("https://x/30x30/aa.png").glyph, condition("https://x/30x30/a.png").glyph)
+assert.strictEqual(windText(4, "WZW"), "WSW 14 km/h")
+const feed = JSON.stringify({
+  actual: { stationmeasurements: [
+    { stationname: "Far", lat: 51.0, lon: 4.0, temperature: 3, feeltemperature: 1, humidity: 50, windspeed: 1, winddirection: "N", iconurl: "a.png" },
+    { stationname: "Near", lat: 52.10, lon: 5.18, temperature: 8.2, feeltemperature: null, humidity: 83, windspeed: 4, winddirection: "WZW", iconurl: "c.png" },
+  ] },
+  forecast: { fivedayforecast: [
+    { day: "2026-11-21T00:00:00", mintemperature: "0", maxtemperature: "8", rainChance: 70, iconurl: "q.png" },
+    { day: "2026-11-22T00:00:00", mintemperature: "-1", maxtemperature: "7", rainChance: 10, iconurl: "b.png" },
+    { day: "2026-11-23T00:00:00", mintemperature: "-1", maxtemperature: "5", rainChance: 0, iconurl: "b.png" },
+    { day: "2026-11-24T00:00:00", mintemperature: "-2", maxtemperature: "3", rainChance: 0, iconurl: "b.png" },
+    { day: "2026-11-25T00:00:00", mintemperature: "-2", maxtemperature: "2", rainChance: 0, iconurl: "b.png" },
+  ] },
+})
+const w = parseFeed(feed, 52.09, 5.12, "2026-11-21")
+assert.strictEqual(w.now.temp, "8°")
+assert.strictEqual(w.now.feels, "—")
+assert.strictEqual(w.now.wind, "WSW 14 km/h")
+assert.strictEqual(w.now.humidity, "83%")
+assert.strictEqual(w.now.text, "Overcast")
+assert.deepStrictEqual(w.days.map(d => d.name), ["SUN", "MON", "TUE"])
+assert.deepStrictEqual([w.days[0].hi, w.days[0].lo, w.days[0].rain], ["7°", "-1°", "rain 10%"])
+assert.strictEqual(parseFeed("nope", 52, 5, "2026-11-21"), null)
 
 const raw = "118|14:35\n104|14:40\n077|14:45\n000|14:50\n000|14:55\n000|15:00\n087|15:05\n092|15:10\n000|15:15\n000|15:20\n087|15:25\n"
 const pts = parseRainText(raw)
