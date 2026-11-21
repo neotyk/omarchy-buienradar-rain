@@ -155,13 +155,16 @@ function parsePlaces(raw) {
   })
 }
 
-// Local "HH:MM" of a radar GIF frame (history=0). Frames are 10 minutes apart,
-// and the first one is the UTC time in the GIF's URL (".../Animation/YYYYMMDDHHMM__...").
-function frameTime(url, frame) {
+// Time (ms) of the first radar GIF frame (history=0): the UTC time in the GIF's
+// URL (".../Animation/YYYYMMDDHHMM__..."). 0 when the URL has none.
+function radarStart(url) {
   var m = String(url).match(/(\d{4})(\d\d)(\d\d)(\d\d)(\d\d)__/)
-  if (!m) return ""
-  var d = new Date(Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5] + frame * 10))
-  return d.toTimeString().slice(0, 5)
+  return m ? Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5]) : 0
 }
 
-if (typeof module !== "undefined") module.exports = { parseRainText: parseRainText, summary: summary, scale: scale, parsePlaces: parsePlaces, MODERATE: MODERATE, HEAVY: HEAVY, condition: condition, windText: windText, parseFeed: parseFeed, frameTime: frameTime }
+// Local "HH:MM" of a radar frame; frames are 10 minutes apart.
+function frameTime(start, frame) {
+  return start ? new Date(start + frame * 600000).toTimeString().slice(0, 5) : ""
+}
+
+if (typeof module !== "undefined") module.exports = { parseRainText: parseRainText, summary: summary, scale: scale, parsePlaces: parsePlaces, MODERATE: MODERATE, HEAVY: HEAVY, condition: condition, windText: windText, parseFeed: parseFeed, radarStart: radarStart, frameTime: frameTime }

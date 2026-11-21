@@ -28,6 +28,7 @@ Panel {
   readonly property string placeName: setting("place", "")
   readonly property string radarPath: Quickshell.env("XDG_RUNTIME_DIR") + "/buienradar-radar.gif"
   property string radarUrl: ""            // final GIF URL; it holds the frame times
+  readonly property real radarStart: Model.radarStart(radarUrl)
 
   property var points: []
   property real pointsAt: 0    // when points last arrived (ms)
@@ -118,17 +119,19 @@ Panel {
       + "?height=512&width=500&renderBackground=True&renderBranding=False&renderText=True&history=0&forecast=12"]
     stdout: StdioCollector {
       waitForEnd: true
-      onStreamFinished: root.radarUrl = text.trim() || root.radarUrl
-    }
-    onExited: function(code) {
-      if (code !== 0) return
-      // Stop the animation before swapping files; set the new one on the next tick.
-      radar.playing = false
-      radar.source = ""
-      Qt.callLater(function() {
-        radar.source = "file://" + root.radarPath
-        radar.playing = Qt.binding(function() { return root.opened })
-      })
+      onStreamFinished: {
+        var url = text.trim()
+        if (!url) return   // download failed; keep the old map
+        // Stop the animation before swapping files; set the new one, and its
+        // frame times, together on the next tick.
+        radar.playing = false
+        radar.source = ""
+        Qt.callLater(function() {
+          root.radarUrl = url
+          radar.source = "file://" + root.radarPath
+          radar.playing = Qt.binding(function() { return root.opened })
+        })
+      }
     }
   }
 
@@ -243,6 +246,7 @@ Panel {
 
           // ---- Now: icon + temperature left, place and stats right.
           Item {
+            z: 1   // the place suggestions below it cover the rest of the column
             width: parent.width
             height: Math.max(nowLeft.height, nowRight.height)
 
@@ -297,36 +301,45 @@ Panel {
                 Stat { name: "HUMID"; value: root.weather ? root.weather.now.humidity : "" }
               }
             }
-          }
 
-          // ---- Place suggestions while searching.
-          Column {
-            width: parent.width
-            visible: root.editing && root.places.length > 0
-            Repeater {
-              model: root.places
-              Rectangle {
-                required property var modelData
-                required property int index
+            // ---- Place suggestions while searching: drawn over the days and rain,
+            // so the layout does not move while typing.
+            Rectangle {
+              anchors.top: parent.bottom
+              anchors.topMargin: Style.space(8)
+              width: parent.width
+              height: suggestionList.height
+              color: Commons.Color.popups.background
+              visible: root.editing && root.places.length > 0
+              Column {
+                id: suggestionList
                 width: parent.width
-                height: placeRow.implicitHeight + Style.space(12)
-                radius: Style.cornerRadius
-                color: index === root.placeIndex ? Style.hoverFillFor(root.fg, Commons.Color.accent) : "transparent"
-                Row {
-                  id: placeRow
-                  anchors.left: parent.left
-                  anchors.leftMargin: Style.space(12)
-                  anchors.verticalCenter: parent.verticalCenter
-                  spacing: Style.space(8)
-                  Label { text: modelData.name }
-                  Label { text: modelData.description; color: root.dim; font.pixelSize: Style.font.bodySmall; anchors.verticalCenter: parent.verticalCenter }
-                }
-                MouseArea {
-                  anchors.fill: parent
-                  hoverEnabled: true
-                  cursorShape: Qt.PointingHandCursor
-                  onPositionChanged: root.placeIndex = index
-                  onClicked: root.pickPlace(modelData)
+                Repeater {
+                  model: root.places
+                  Rectangle {
+                    required property var modelData
+                    required property int index
+                    width: parent.width
+                    height: placeRow.implicitHeight + Style.space(12)
+                    radius: Style.cornerRadius
+                    color: index === root.placeIndex ? Style.hoverFillFor(root.fg, Commons.Color.accent) : "transparent"
+                    Row {
+                      id: placeRow
+                      anchors.left: parent.left
+                      anchors.leftMargin: Style.space(12)
+                      anchors.verticalCenter: parent.verticalCenter
+                      spacing: Style.space(8)
+                      Label { text: modelData.name }
+                      Label { text: modelData.description; color: root.dim; font.pixelSize: Style.font.bodySmall; anchors.verticalCenter: parent.verticalCenter }
+                    }
+                    MouseArea {
+                      anchors.fill: parent
+                      hoverEnabled: true
+                      cursorShape: Qt.PointingHandCursor
+                      onPositionChanged: root.placeIndex = index
+                      onClicked: root.pickPlace(modelData)
+                    }
+                  }
                 }
               }
             }
@@ -373,8 +386,8 @@ Panel {
             Canvas {
               id: graph
               width: parent.width
-              // Fill the left column down to the bottom of the radar column.
-              height: Math.max(Style.space(120), radarColumn.height - graphBlock.y - graphBlock.spacing - axis.height)
+              // Graph bottom lines up with the map bottom; the axis sits beside the source caption.
+              height: Math.max(Style.space(120), radar.height - graphBlock.y)
               // Repaint when the data or the theme colors change.
               readonly property var watch: [root.points, root.fg, root.dim, Commons.Color.accent]
               onWatchChanged: requestPaint()
@@ -417,10 +430,10 @@ Panel {
               // Time of the radar frame on screen; hidden if that time is not on the graph.
               Rectangle {
                 id: cursor
-                readonly property string time: Model.frameTime(root.radarUrl, radar.currentFrame)
+                readonly property string time: Model.frameTime(root.radarStart, radar.currentFrame)
                 readonly property int idx: root.points.findIndex(function (p) { return p.time === cursor.time })
-                visible: idx >= 0
-                x: idx * parent.width / (root.points.length - 1) - width / 2
+                visible: idx >= 0 && root.points.length > 1
+                x: idx * (parent.width - width) / (root.points.length - 1)
                 width: 2
                 height: parent.height
                 color: Commons.Color.accent
@@ -428,7 +441,6 @@ Panel {
             }
 
             Item {
-              id: axis
               width: parent.width
               height: Style.space(14)
               Repeater {
@@ -448,7 +460,6 @@ Panel {
 
         // ---- Radar map.
         Column {
-          id: radarColumn
           spacing: Style.space(10)
           AnimatedImage {
             id: radar
