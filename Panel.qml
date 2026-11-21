@@ -13,7 +13,6 @@ Panel {
   id: root
   moduleName: "buienradar.rain"
   ipcTarget: "buienradar.rain"
-  manageIpc: false
 
   property var anchorItem: null
   property var hostWidget: null
@@ -21,13 +20,16 @@ Panel {
 
   // ponytail: rain is blue in every theme, so this one color is fixed.
   readonly property color rainColor: "#3badb2"
-  readonly property color dim: Qt.darker(root.bar.foreground, 1.4)
+  // bar is injected after load, so it is null for a moment.
+  readonly property color fg: root.bar ? root.bar.foreground : Commons.Color.foreground
+  readonly property color dim: Qt.darker(root.fg, 1.4)
   readonly property real latitude: parseFloat(setting("latitude", 52.37))
   readonly property real longitude: parseFloat(setting("longitude", 4.89))
   readonly property string placeName: setting("place", "")
   readonly property string radarPath: Quickshell.env("XDG_RUNTIME_DIR") + "/buienradar-radar.gif"
 
   property var points: []
+  property real pointsAt: 0    // when points last arrived (ms)
   property var weather: null   // last good parseFeed() result
   readonly property var info: Model.summary(points)
   // Bar text; empty until the first good response, which hides the widget.
@@ -38,23 +40,17 @@ Panel {
   }
 
   function refresh() {
+    // Rain data older than 15 minutes would show a "next change" that has passed.
+    if (points.length && Date.now() - pointsAt > 15 * 60 * 1000) points = []
     if (!rainProc.running) rainProc.running = true
     if (!feedProc.running) feedProc.running = true
   }
 
-  function open() { openFromHotkey() }
-
-  function openFromHotkey() {
+  // close(), toggle() and IPC come from the base Panel.
+  function open() {
     root.controller.show()
     if (!radarProc.running) radarProc.running = true
     root.refresh()
-  }
-
-  function close() { root.controller.hide() }
-
-  function toggle() {
-    if (root.opened) root.close()
-    else root.openFromHotkey()
   }
 
   function switchPanel(direction) {
@@ -73,7 +69,7 @@ Panel {
         var parsed = Model.parseRainText(text)
         if (parsed.length) {
           root.points = parsed
-          graph.requestPaint()
+          root.pointsAt = Date.now()
         }
       }
     }
@@ -95,13 +91,20 @@ Panel {
   // loading of the animation was the main suspect in a shell crash.
   Process {
     id: radarProc
-    command: ["sh", "-c", "curl -fsSL --max-time 20 -o \"$1.tmp\" \"$2\" && [ -s \"$1.tmp\" ] && mv \"$1.tmp\" \"$1\"", "sh", root.radarPath,
+    // Own temp file per run, so two instances during a hot reload never share one.
+    command: ["sh", "-c", "t=$(mktemp \"$1.XXXXXX\") && curl -fsSL --max-time 20 -o \"$t\" \"$2\" && [ -s \"$t\" ] && mv \"$t\" \"$1\" || { rm -f \"$t\"; exit 1; }",
+      "sh", root.radarPath,
       "https://image.buienradar.nl/2.0/image/animation/RadarMapRainNL"
       + "?height=512&width=500&renderBackground=True&renderBranding=False&renderText=True&history=12&forecast=24"]
     onExited: function(code) {
       if (code !== 0) return
+      // Stop the animation before swapping files; set the new one on the next tick.
+      radar.playing = false
       radar.source = ""
-      radar.source = "file://" + root.radarPath
+      Qt.callLater(function() {
+        radar.source = "file://" + root.radarPath
+        radar.playing = Qt.binding(function() { return root.opened })
+      })
     }
   }
 
@@ -114,17 +117,9 @@ Panel {
     onTriggered: root.refresh()
   }
 
-  IpcHandler {
-    target: root.ipcTarget
-    function open(): void { root.openFromHotkey() }
-    function close(): void { root.close() }
-    function toggle(): void { root.toggle() }
-    function refresh(): void { root.refresh() }
-  }
-
   component Label: Text {
-    color: root.bar.foreground
-    font.family: root.bar.fontFamily
+    color: root.fg
+    font.family: root.bar ? root.bar.fontFamily : ""
     font.pixelSize: Style.font.body
   }
 
@@ -235,6 +230,9 @@ Panel {
               id: graph
               width: parent.width
               height: Style.space(120)
+              // Repaint when the data or the theme colors change.
+              readonly property var watch: [root.points, root.fg, Commons.Color.accent]
+              onWatchChanged: requestPaint()
               onPaint: {
                 var ctx = getContext("2d")
                 ctx.reset()
@@ -245,7 +243,7 @@ Panel {
                 var max = Math.max(2.5, peak)
                 function y(mm) { return height - 4 - (mm / max) * (height - 8) }
 
-                ctx.strokeStyle = Qt.rgba(root.bar.foreground.r, root.bar.foreground.g, root.bar.foreground.b, 0.12)
+                ctx.strokeStyle = Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.12)
                 ctx.setLineDash([3, 4])
                 ;[0.5, 2].forEach(function (mm) {
                   ctx.beginPath(); ctx.moveTo(0, y(mm)); ctx.lineTo(width, y(mm)); ctx.stroke()

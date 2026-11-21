@@ -3,7 +3,7 @@ import Quickshell
 import qs.Commons
 import qs.Ui
 
-// Bar pill: rain icon plus the next change ("dry 14:50" / "rain 16:15").
+// Bar pill: condition icon, temperature and the next rain change ("8° · rain 16:15").
 // Wiring follows Omarchy's own omarchy.weather bar widget.
 BarWidget {
   id: root
@@ -21,7 +21,7 @@ BarWidget {
   readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false
   readonly property bool popoutSwitchClosing: panelLoader.item ? panelLoader.item.popoutSwitchClosing === true : false
 
-  function open() { if (panelLoader.item) panelLoader.item.openFromHotkey() }
+  function open() { if (panelLoader.item) panelLoader.item.open() }
   function close() { if (panelLoader.item) panelLoader.item.close() }
   function closeForPopoutSwitch() { if (panelLoader.item) panelLoader.item.closeForPopoutSwitch() }
 

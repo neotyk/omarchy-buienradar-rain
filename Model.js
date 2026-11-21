@@ -17,17 +17,18 @@ function intensity(mm) {
   return "light"
 }
 
-// Consecutive wet/dry stretches: [{ wet, start, end, peak }], end = index after the run.
+// Consecutive wet/dry stretches: [{ wet, end, peak }], end = index after the run.
+// Under 0.1 mm/h is sensor noise, not rain.
 function runs(points) {
   var out = []
   for (var i = 0; i < points.length; ++i) {
-    var wet = points[i].mm > 0
+    var wet = points[i].mm >= 0.1
     var last = out[out.length - 1]
     if (last && last.wet === wet) {
       last.end = i + 1
       last.peak = Math.max(last.peak, points[i].mm)
     } else {
-      out.push({ wet: wet, start: i, end: i + 1, peak: points[i].mm })
+      out.push({ wet: wet, end: i + 1, peak: points[i].mm })
     }
   }
   return out
@@ -40,7 +41,7 @@ function summary(points) {
   var first = r[0]
   if (r.length === 1)
     return first.wet
-      ? { title: "Rain for the next 2 hours", sub: intensity(first.peak) + " rain until " + points[points.length - 1].time, pill: "" }
+      ? { title: "Rain for the next 2 hours", sub: capitalize(intensity(first.peak)) + " rain until " + points[points.length - 1].time, pill: "" }
       : { title: "Dry for the next 2 hours", sub: "", pill: "" }
 
   var change = points[first.end].time
@@ -64,7 +65,7 @@ function capitalize(s) {
 }
 
 // Buienradar icon letter -> English word + Nerd Font (Material) weather glyph.
-// A doubled letter ("aa.png") is the night version.
+// A doubled letter ("aa.png", "bb.png") is the night version.
 var CONDITIONS = {
   a: ["Clear", 0xf0599], b: ["Partly cloudy", 0xf0595], j: ["Partly cloudy", 0xf0595],
   o: ["Partly cloudy", 0xf0595], r: ["Partly cloudy", 0xf0595], c: ["Overcast", 0xf0590],
@@ -77,8 +78,10 @@ var CONDITIONS = {
 function condition(iconUrl) {
   var code = (String(iconUrl || "").match(/([a-z]+)\.png$/) || [])[1] || ""
   var c = CONDITIONS[code.charAt(code.length - 1)] || ["", 0xf0590]
-  var night = code.length > 1 && code.charAt(0) === "a"
-  return { text: c[0], glyph: String.fromCodePoint(night ? 0xf0594 : c[1]) }
+  // Night: moon for clear, moon-and-cloud for partly cloudy; other conditions look the same.
+  var night = code.length > 1 && code.charAt(0) === code.charAt(1)
+  var glyph = night && c[1] === 0xf0599 ? 0xf0594 : night && c[1] === 0xf0595 ? 0xf0f31 : c[1]
+  return { text: c[0], glyph: String.fromCodePoint(glyph) }
 }
 
 function windText(ms, dir) {
@@ -86,8 +89,8 @@ function windText(ms, dir) {
   return (d ? d + " " : "") + Math.round(ms * 3.6) + " km/h"
 }
 
-function deg(v) {
-  return v === null || v === undefined || v === "" || isNaN(v) ? "—" : Math.round(v) + "°"
+function fmt(v, unit) {
+  return v === null || v === undefined || v === "" || isNaN(v) ? "—" : Math.round(v) + unit
 }
 
 var WEEKDAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"]
@@ -109,22 +112,22 @@ function parseFeed(raw, lat, lon, todayIso) {
     .filter(function (d) { return String(d.day).slice(0, 10) > todayIso })
     .slice(0, 3)
     .map(function (d) {
-      var date = String(d.day).slice(0, 10).split("-")
       return {
-        name: WEEKDAYS[new Date(Date.UTC(+date[0], date[1] - 1, +date[2])).getUTCDay()],
-        hi: deg(d.maxtemperature), lo: deg(d.mintemperature),
+        // A date-only ISO string parses as UTC midnight, so getUTCDay is timezone-safe.
+        name: WEEKDAYS[new Date(String(d.day).slice(0, 10)).getUTCDay()],
+        hi: fmt(d.maxtemperature, "°"), lo: fmt(d.mintemperature, "°"),
         rain: "rain " + (d.rainChance || 0) + "%", glyph: condition(d.iconurl).glyph
       }
     })
   return {
     now: {
-      temp: deg(st.temperature), feels: deg(st.feeltemperature),
+      temp: fmt(st.temperature, "°"), feels: fmt(st.feeltemperature, "°"),
       wind: windText(st.windspeed || 0, st.winddirection),
-      humidity: st.humidity === null || st.humidity === undefined ? "—" : Math.round(st.humidity) + "%",
+      humidity: fmt(st.humidity, "%"),
       text: c.text, glyph: c.glyph
     },
     days: days
   }
 }
 
-if (typeof module !== "undefined") module.exports = { parseRainText: parseRainText, summary: summary, runs: runs, condition: condition, windText: windText, parseFeed: parseFeed }
+if (typeof module !== "undefined") module.exports = { parseRainText: parseRainText, summary: summary, condition: condition, windText: windText, parseFeed: parseFeed }

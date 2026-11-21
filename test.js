@@ -48,4 +48,11 @@ assert.deepStrictEqual(summary(parseRainText("000|10:00\n000|10:05\n130|10:10\n"
 })
 assert.strictEqual(summary(parseRainText("000|10:00\n000|10:05\n")).title, "Dry for the next 2 hours")
 assert.strictEqual(summary(parseRainText("")).pill, "")
+// Sensor noise (001 ≈ 0.0004 mm/h) is not rain.
+assert.strictEqual(summary(parseRainText("001|10:00\n000|10:05\n")).title, "Dry for the next 2 hours")
+// Every sub line starts with a capital.
+assert.strictEqual(summary(parseRainText("100|23:50\n100|23:55\n")).sub, "Light rain until 23:55")
+// Night versions: doubled letter.
+assert.notStrictEqual(condition("bb.png").glyph, condition("b.png").glyph)
+assert.strictEqual(condition("cc.png").text, "Overcast")
 console.log("ok")
