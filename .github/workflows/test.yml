@@ -1,0 +1,11 @@
+name: test
+on:
+  push: { branches: [main] }
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # ponytail: the runner ships Node, so no setup-node step.
+      - run: node test.js
