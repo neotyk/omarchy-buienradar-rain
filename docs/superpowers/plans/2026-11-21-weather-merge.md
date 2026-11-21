@@ -8,7 +8,7 @@
 **Spec:** `docs/superpowers/specs/2026-11-21-weather-merge-design.md`
 
 ## Global Constraints
-- Data only from Buienradar: `https://data.buienradar.nl/2.0/feed/json` (10 min), raintext (5 min).
+- Data only from Buienradar: `https://data.buienradar.nl/2.0/feed/json` and raintext, every 5 min.
 - English condition words; °C and km/h only.
 - Radar GIF downloaded with curl to `$XDG_RUNTIME_DIR/buienradar-radar.gif`, never loaded by Qt from the network.
 - Pill format: `<glyph> 8° · rain 16:15`; `<glyph> 8°` when no change within 2 hours.

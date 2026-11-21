@@ -1,10 +1,11 @@
 # Buienradar Rain for Omarchy
 
-An [Omarchy](https://omarchy.org/) bar widget that shows rain for the next 2 hours.
+An [Omarchy](https://omarchy.org/) bar widget for weather and rain. It replaces the standard `omarchy.weather` widget.
 Data comes from [Buienradar](https://www.buienradar.nl), so it works in the Netherlands and Belgium only.
 
-- **Bar:** a rain icon plus the next change, for example `dry 14:50` or `rain 16:15`. Only the icon shows when nothing changes within 2 hours.
-- **Popup:** a summary, a rain graph in 5-minute steps, and the animated Buienradar radar map.
+- **Bar:** condition icon, temperature and the next rain change, for example `8° · rain 16:15`.
+- **Popup, left:** weather now (feels like, wind, humidity), the next 3 days with rain chance, a rain summary, and a 2-hour rain graph.
+- **Popup, right:** the animated Buienradar radar map.
 - **Mouse:** left click opens the popup. Middle click refreshes.
 
 ## Install
