@@ -404,9 +404,6 @@ Panel {
                 ctx.fillStyle = Qt.rgba(root.rainColor.r, root.rainColor.g, root.rainColor.b, 0.18)
                 ctx.fill()
 
-                ctx.fillStyle = Commons.Color.accent
-                ctx.fillRect(0, 0, 2, height)
-
                 // Level names, each centred in its own band.
                 ctx.font = Style.font.caption + "px \"" + (root.bar ? root.bar.fontFamily : "monospace") + "\""
                 ctx.fillStyle = root.dim
