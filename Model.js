@@ -155,12 +155,12 @@ function parsePlaces(raw) {
   })
 }
 
-// Local "HH:MM" of a radar GIF frame. Frames are 10 minutes apart, and frame
-// history-1 is the UTC time in the GIF's URL (".../Animation/YYYYMMDDHHMM__...").
-function frameTime(url, history, frame) {
+// Local "HH:MM" of a radar GIF frame (history=0). Frames are 10 minutes apart,
+// and the first one is the UTC time in the GIF's URL (".../Animation/YYYYMMDDHHMM__...").
+function frameTime(url, frame) {
   var m = String(url).match(/(\d{4})(\d\d)(\d\d)(\d\d)(\d\d)__/)
   if (!m) return ""
-  var d = new Date(Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5] + (frame - history + 1) * 10))
+  var d = new Date(Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5] + frame * 10))
   return ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2)
 }
 

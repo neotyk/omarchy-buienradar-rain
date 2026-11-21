@@ -27,7 +27,6 @@ Panel {
   readonly property real longitude: parseFloat(setting("longitude", 4.89))
   readonly property string placeName: setting("place", "")
   readonly property string radarPath: Quickshell.env("XDG_RUNTIME_DIR") + "/buienradar-radar.gif"
-  readonly property int radarHistory: 3   // past radar frames, 10 minutes each
   property string radarUrl: ""            // final GIF URL; it holds the frame times
 
   property var points: []
@@ -115,7 +114,8 @@ Panel {
     command: ["sh", "-c", "t=$(mktemp \"$1.XXXXXX\") && u=$(curl -fsSL --max-time 20 -w '%{url_effective}' -o \"$t\" \"$2\") && [ -s \"$t\" ] && mv \"$t\" \"$1\" && echo \"$u\" || { rm -f \"$t\"; exit 1; }",
       "sh", root.radarPath,
       "https://image.buienradar.nl/2.0/image/animation/RadarMapRainNL"
-      + "?height=512&width=500&renderBackground=True&renderBranding=False&renderText=True&history=" + root.radarHistory + "&forecast=24"]
+      // No past frames and 12 ten-minute frames: the map spans the 2-hour rain graph.
+      + "?height=512&width=500&renderBackground=True&renderBranding=False&renderText=True&history=0&forecast=12"]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: if (text.trim()) root.radarUrl = text.trim()
@@ -417,10 +417,10 @@ Panel {
                 ctx.fillText("heavy", width - 2, (y(Model.HEAVY) + 4) / 2)
               }
 
-              // Time of the radar frame on screen; hidden when that time is off the graph.
+              // Time of the radar frame on screen; hidden if that time is not on the graph.
               Rectangle {
                 id: cursor
-                readonly property string time: Model.frameTime(root.radarUrl, root.radarHistory, radar.currentFrame)
+                readonly property string time: Model.frameTime(root.radarUrl, radar.currentFrame)
                 readonly property int idx: root.points.findIndex(function (p) { return p.time === cursor.time })
                 visible: idx >= 0
                 x: idx * parent.width / (root.points.length - 1) - width / 2
