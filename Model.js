@@ -11,10 +11,20 @@ function parseRainText(raw) {
   }).filter(function (p) { return p !== null })
 }
 
+// Rain levels in mm/h, shared by the summary text and the graph.
+var MODERATE = 2.5
+var HEAVY = 10
+
 function intensity(mm) {
-  if (mm >= 10) return "heavy"
-  if (mm >= 2.5) return "moderate"
+  if (mm >= HEAVY) return "heavy"
+  if (mm >= MODERATE) return "moderate"
   return "light"
+}
+
+// Graph height 0..1 on a log scale from 0.1 to 20 mm/h, so light rain stays visible.
+function scale(mm) {
+  if (mm < 0.1) return 0
+  return Math.min(1, (Math.log10(mm) + 1) / (Math.log10(20) + 1))
 }
 
 // Consecutive wet/dry stretches: [{ wet, end, peak }], end = index after the run.
@@ -130,4 +140,4 @@ function parseFeed(raw, lat, lon, todayIso) {
   }
 }
 
-if (typeof module !== "undefined") module.exports = { parseRainText: parseRainText, summary: summary, condition: condition, windText: windText, parseFeed: parseFeed }
+if (typeof module !== "undefined") module.exports = { parseRainText: parseRainText, summary: summary, scale: scale, MODERATE: MODERATE, HEAVY: HEAVY, condition: condition, windText: windText, parseFeed: parseFeed }

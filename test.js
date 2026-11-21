@@ -52,6 +52,12 @@ assert.strictEqual(summary(parseRainText("")).pill, "")
 assert.strictEqual(summary(parseRainText("001|10:00\n000|10:05\n")).title, "Dry for the next 2 hours")
 // Every sub line starts with a capital.
 assert.strictEqual(summary(parseRainText("100|23:50\n100|23:55\n")).sub, "Light rain until 23:55")
+// Graph height: log scale, 0 when dry, 1 at 20 mm/h and above; light rain stays visible.
+assert.strictEqual(m.exports.scale(0), 0)
+assert.strictEqual(m.exports.scale(20), 1)
+assert.strictEqual(m.exports.scale(100), 1)
+assert.ok(m.exports.scale(0.7) > 0.3 && m.exports.scale(0.7) < 0.5)
+assert.ok(m.exports.scale(m.exports.MODERATE) < m.exports.scale(m.exports.HEAVY))
 // Night versions: doubled letter.
 assert.notStrictEqual(condition("bb.png").glyph, condition("b.png").glyph)
 assert.strictEqual(condition("cc.png").text, "Overcast")

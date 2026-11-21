@@ -233,21 +233,18 @@ Panel {
               width: parent.width
               height: Style.space(120)
               // Repaint when the data or the theme colors change.
-              readonly property var watch: [root.points, root.fg, Commons.Color.accent]
+              readonly property var watch: [root.points, root.fg, root.dim, Commons.Color.accent]
               onWatchChanged: requestPaint()
               onPaint: {
                 var ctx = getContext("2d")
                 ctx.reset()
                 var pts = root.points
                 if (pts.length < 2) return
-                var peak = 0
-                for (var i = 0; i < pts.length; ++i) peak = Math.max(peak, pts[i].mm)
-                var max = Math.max(2.5, peak)
-                function y(mm) { return height - 4 - (mm / max) * (height - 8) }
+                function y(mm) { return height - 4 - Model.scale(mm) * (height - 8) }
 
                 ctx.strokeStyle = Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.12)
                 ctx.setLineDash([3, 4])
-                ;[0.5, 2].forEach(function (mm) {
+                ;[Model.MODERATE, Model.HEAVY].forEach(function (mm) {
                   ctx.beginPath(); ctx.moveTo(0, y(mm)); ctx.lineTo(width, y(mm)); ctx.stroke()
                 })
                 ctx.setLineDash([])
@@ -266,6 +263,14 @@ Panel {
 
                 ctx.fillStyle = Commons.Color.accent
                 ctx.fillRect(0, 0, 2, height)
+
+                // Level names, each just above the line where it starts.
+                ctx.font = Style.font.caption + "px \"" + (root.bar ? root.bar.fontFamily : "monospace") + "\""
+                ctx.fillStyle = root.dim
+                ctx.textAlign = "right"
+                ctx.fillText("light", width - 2, height - 8)
+                ctx.fillText("moderate", width - 2, y(Model.MODERATE) - 4)
+                ctx.fillText("heavy", width - 2, y(Model.HEAVY) - 4)
               }
             }
 
