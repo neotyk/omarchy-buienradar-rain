@@ -42,11 +42,24 @@ Panel {
   function refresh() {
     // Rain data older than 15 minutes would show a "next change" that has passed.
     if (points.length && Date.now() - pointsAt > 15 * 60 * 1000) points = []
-    if (!rainProc.running) rainProc.running = true
-    if (!feedProc.running) feedProc.running = true
+    if (!rainProc.running) { rainProc.key = locationKey; rainProc.running = true }
+    if (!feedProc.running) { feedProc.key = locationKey; feedProc.running = true }
   }
 
-  // close(), toggle() and IPC come from the base Panel.
+  // Each fetch remembers the location it was started for; results for an older place are dropped.
+  function stale(proc) {
+    if (proc.key === locationKey) return false
+    locationChange.restart()   // refetch shortly, once this process has exited
+    return true
+  }
+
+  // close() also ends a search, so the key catcher is not left blocked.
+  function close() {
+    if (editing) stopEditing()
+    root.controller.hide()
+  }
+
+  // toggle() and IPC come from the base Panel.
   function open() {
     root.controller.show()
     if (!radarProc.running) radarProc.running = true
@@ -61,11 +74,13 @@ Panel {
 
   Process {
     id: rainProc
+    property string key
     command: ["curl", "-fsS", "--max-time", "10",
       "https://gpsgadget.buienradar.nl/data/raintext?lat=" + root.latitude.toFixed(2) + "&lon=" + root.longitude.toFixed(2)]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
+        if (root.stale(rainProc)) return
         var parsed = Model.parseRainText(text)
         if (parsed.length) {
           root.points = parsed
@@ -77,10 +92,12 @@ Panel {
 
   Process {
     id: feedProc
+    property string key
     command: ["curl", "-fsS", "--max-time", "10", "https://data.buienradar.nl/2.0/feed/json"]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
+        if (root.stale(feedProc)) return
         var parsed = Model.parseFeed(text, root.latitude, root.longitude, Qt.formatDate(new Date(), "yyyy-MM-dd"))
         if (parsed) root.weather = parsed
       }
@@ -136,6 +153,7 @@ Panel {
 
   function stopEditing() {
     editing = false
+    placeDebounce.stop()
     places = []
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
@@ -222,7 +240,6 @@ Panel {
           Item {
             width: parent.width
             height: Math.max(nowLeft.height, nowRight.height)
-            visible: root.weather !== null
 
             Row {
               id: nowLeft
@@ -256,10 +273,11 @@ Panel {
                 placeholderText: "Search place (NL/BE)"
                 foreground: root.fg
                 font.family: root.bar ? root.bar.fontFamily : ""
-                onTextChanged: if (root.editing) placeDebounce.restart()
+                // Old suggestions go away at once, so Enter never picks from a previous search.
+                onTextChanged: if (root.editing) { root.places = []; placeDebounce.restart() }
                 Keys.onPressed: function(event) {
                   if (event.key === Qt.Key_Escape) root.stopEditing()
-                  else if (event.key === Qt.Key_Down) root.placeIndex = Math.min(root.placeIndex + 1, root.places.length - 1)
+                  else if (event.key === Qt.Key_Down) root.placeIndex = Math.max(0, Math.min(root.placeIndex + 1, root.places.length - 1))
                   else if (event.key === Qt.Key_Up) root.placeIndex = Math.max(root.placeIndex - 1, 0)
                   else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) root.pickPlace(root.places[root.placeIndex])
                   else return
