@@ -112,7 +112,7 @@ Panel {
     command: ["sh", "-c", "t=$(mktemp \"$1.XXXXXX\") && curl -fsSL --max-time 20 -o \"$t\" \"$2\" && [ -s \"$t\" ] && mv \"$t\" \"$1\" || { rm -f \"$t\"; exit 1; }",
       "sh", root.radarPath,
       "https://image.buienradar.nl/2.0/image/animation/RadarMapRainNL"
-      + "?height=512&width=500&renderBackground=True&renderBranding=False&renderText=True&history=12&forecast=24"]
+      + "?height=512&width=500&renderBackground=True&renderBranding=False&renderText=True&history=3&forecast=24"]
     onExited: function(code) {
       if (code !== 0) return
       // Stop the animation before swapping files; set the new one on the next tick.
@@ -126,12 +126,16 @@ Panel {
   }
 
   // Rain updates every 5 minutes; the small weather feed rides the same timer.
+  // The radar map only updates while the popup is open; open() fetches it too.
   Timer {
     interval: 5 * 60 * 1000
     running: true
     repeat: true
     triggeredOnStart: true
-    onTriggered: root.refresh()
+    onTriggered: {
+      root.refresh()
+      if (root.opened && !radarProc.running) radarProc.running = true
+    }
   }
 
   // A new location refetches once both coordinates have changed.
