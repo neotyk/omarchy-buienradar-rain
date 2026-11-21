@@ -100,7 +100,7 @@ function windText(ms, dir) {
 }
 
 function fmt(v, unit) {
-  return v === null || v === undefined || v === "" || isNaN(v) ? "—" : Math.round(v) + unit
+  return v == null || v === "" || isNaN(v) ? "—" : Math.round(v) + unit
 }
 
 var WEEKDAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"]
@@ -161,7 +161,7 @@ function frameTime(url, frame) {
   var m = String(url).match(/(\d{4})(\d\d)(\d\d)(\d\d)(\d\d)__/)
   if (!m) return ""
   var d = new Date(Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5] + frame * 10))
-  return ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2)
+  return d.toTimeString().slice(0, 5)
 }
 
 if (typeof module !== "undefined") module.exports = { parseRainText: parseRainText, summary: summary, scale: scale, parsePlaces: parsePlaces, MODERATE: MODERATE, HEAVY: HEAVY, condition: condition, windText: windText, parseFeed: parseFeed, frameTime: frameTime }

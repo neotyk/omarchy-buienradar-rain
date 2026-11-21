@@ -118,7 +118,7 @@ Panel {
       + "?height=512&width=500&renderBackground=True&renderBranding=False&renderText=True&history=0&forecast=12"]
     stdout: StdioCollector {
       waitForEnd: true
-      onStreamFinished: if (text.trim()) root.radarUrl = text.trim()
+      onStreamFinished: root.radarUrl = text.trim() || root.radarUrl
     }
     onExited: function(code) {
       if (code !== 0) return
