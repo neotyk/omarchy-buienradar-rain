@@ -12,10 +12,10 @@ BarWidget {
   function injectPanel() {
     var target = panelLoader.item
     if (!target) return
-    if ("bar" in target) target.bar = root.bar
-    if ("settings" in target) target.settings = root.settings
-    if ("anchorItem" in target) target.anchorItem = button
-    if ("hostWidget" in target) target.hostWidget = root
+    target.bar = root.bar
+    target.settings = root.settings
+    target.anchorItem = button
+    target.hostWidget = root
   }
 
   readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false

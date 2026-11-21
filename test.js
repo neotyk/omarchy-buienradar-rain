@@ -71,4 +71,11 @@ assert.deepStrictEqual(m.exports.parsePlaces("not json"), [])
 // Night versions: doubled letter.
 assert.notStrictEqual(condition("bb.png").glyph, condition("b.png").glyph)
 assert.strictEqual(condition("cc.png").text, "Overcast")
+// Radar frames are 10 minutes apart; the first one is the UTC time in the URL.
+process.env.TZ = "Europe/Amsterdam"
+const url = "https://x/Animation/202611211945__500x512_True_False_True_0_12_1_0_run202611211940.gif"
+const start = m.exports.radarStart(url)
+assert.strictEqual(m.exports.frameTime(start, 0), "20:45")
+assert.strictEqual(m.exports.frameTime(start, 11), "22:35")
+assert.strictEqual(m.exports.frameTime(m.exports.radarStart("nope"), 0), "")
 console.log("ok")
