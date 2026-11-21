@@ -62,7 +62,7 @@ Panel {
   // toggle() and IPC come from the base Panel.
   function open() {
     root.controller.show()
-    if (!radarProc.running) radarProc.running = true
+    radarProc.running = true
     root.refresh()
   }
 
@@ -134,7 +134,7 @@ Panel {
     triggeredOnStart: true
     onTriggered: {
       root.refresh()
-      if (root.opened && !radarProc.running) radarProc.running = true
+      if (root.opened) radarProc.running = true
     }
   }
 
