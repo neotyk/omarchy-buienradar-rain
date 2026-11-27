@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "id": "io.github.neotyk.buienradar-rain",
   "name": "Buienradar Rain",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "neotyk",
-  "description": "Rain for the next 2 hours with graph and animated radar map (Buienradar, NL/BE only)",
+  "description": "Rain for the next 2 hours, 24-hour forecast and animated radar map (Buienradar, NL/BE only)",
   "kinds": [
     "bar-widget"
   ],

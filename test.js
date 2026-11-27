@@ -78,4 +78,21 @@ const start = m.exports.radarStart(url)
 assert.strictEqual(m.exports.frameTime(start, 0), "20:45")
 assert.strictEqual(m.exports.frameTime(start, 11), "22:35")
 assert.strictEqual(m.exports.frameTime(m.exports.radarStart("nope"), 0), "")
+// Hourly forecast: drops past hours, keeps 24, crosses days.
+const hrs = []
+for (let i = 0; i < 30; ++i) {
+  const utc = new Date(Date.UTC(2026, 10, 24, 18 + i)).toISOString().slice(0, 19)
+  const local = new Date(Date.UTC(2026, 10, 24, 19 + i)).toISOString().slice(0, 19)
+  hrs.push({ datetime: local, datetimeutc: utc, temperature: i, precipitation: i === 5 ? 40 : 0, iconcode: i % 2 ? "aa" : "q" })
+}
+const fc = JSON.stringify({ days: [{ hours: hrs.slice(0, 6) }, { hours: null }, { hours: hrs.slice(6) }] })
+const hourly = m.exports.parseHourly(fc, Date.UTC(2026, 10, 24, 20, 30))
+assert.strictEqual(hourly.length, 24)
+assert.deepStrictEqual([hourly[0].hour, hourly[0].temp, hourly[3].chance], ["21", 2, 40])
+assert.strictEqual(hourly[0].glyph, condition("q.png").glyph)
+assert.deepStrictEqual(m.exports.parseHourly("nope", 0), [])
+// Place id: nearest result wins.
+const locs = JSON.stringify([{ id: 1, location: { lat: 50, lon: 4 } }, { id: 2751738, location: { lat: 52.508, lon: 5.475 } }])
+assert.strictEqual(m.exports.parseLocationId(locs, 52.51, 5.48), 2751738)
+assert.strictEqual(m.exports.parseLocationId("[]", 52, 5), 0)
 console.log("ok")

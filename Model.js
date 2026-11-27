@@ -167,4 +167,31 @@ function frameTime(start, frame) {
   return start ? new Date(start + frame * 600000).toTimeString().slice(0, 5) : ""
 }
 
-if (typeof module !== "undefined") module.exports = { parseRainText: parseRainText, summary: summary, scale: scale, parsePlaces: parsePlaces, MODERATE: MODERATE, HEAVY: HEAVY, condition: condition, windText: windText, parseFeed: parseFeed, radarStart: radarStart, frameTime: frameTime }
+// Buienradar place search -> id of the result nearest lat/lon (0 if none).
+// The id picks the hourly forecast; it is a GeoNames id.
+function parseLocationId(raw, lat, lon) {
+  var list
+  try { list = JSON.parse(raw) } catch (e) { return 0 }
+  var k = Math.cos(lat * Math.PI / 180)
+  function d(r) { return Math.pow(r.location.lat - lat, 2) + Math.pow((r.location.lon - lon) * k, 2) }
+  var best = (Array.isArray(list) ? list : []).filter(function (r) { return r && r.id && r.location })
+    .sort(function (a, b) { return d(a) - d(b) })[0]
+  return best ? best.id : 0
+}
+
+// Buienradar hourly forecast -> the next 24 hours, starting with the current hour:
+// [{ hour: "HH", temp, chance (rain %), glyph }].
+function parseHourly(raw, nowMs) {
+  var data
+  try { data = JSON.parse(raw) } catch (e) { return [] }
+  var hours = []
+  ;((data && data.days) || []).forEach(function (d) { hours = hours.concat(d.hours || []) })
+  return hours.filter(function (h) {
+    // datetimeutc has no zone suffix; it is UTC.
+    return h && h.temperature != null && Date.parse(h.datetimeutc + "Z") + 3600000 > nowMs
+  }).slice(0, 24).map(function (h) {
+    return { hour: String(h.datetime).slice(11, 13), temp: h.temperature, chance: h.precipitation || 0, glyph: condition(h.iconcode + ".png").glyph }
+  })
+}
+
+if (typeof module !== "undefined") module.exports = { parseRainText: parseRainText, summary: summary, scale: scale, parsePlaces: parsePlaces, MODERATE: MODERATE, HEAVY: HEAVY, condition: condition, windText: windText, parseFeed: parseFeed, radarStart: radarStart, frameTime: frameTime, parseLocationId: parseLocationId, parseHourly: parseHourly }

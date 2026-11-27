@@ -6,8 +6,8 @@ import qs.Commons as Commons
 import qs.Ui
 import "Model.js" as Model
 
-// Popup, two columns: weather now, next 3 days, rain summary and graph on the
-// left; animated Buienradar radar map on the right.
+// Popup, two columns: weather now, next 3 days, and two tabs (rain for the next
+// 2 hours, forecast for the next 24 hours) on the left; animated Buienradar radar map on the right.
 // Lifecycle code follows Omarchy's own omarchy.weather panel.
 Panel {
   id: root
@@ -33,6 +33,10 @@ Panel {
   property var points: []
   property real pointsAt: 0    // when points last arrived (ms)
   property var weather: null   // last good parseFeed() result
+  property var hourly: []      // last good parseHourly() result
+  property int locationId: 0   // Buienradar id for the hourly forecast
+  property string idKey: ""    // the location the id was found for
+  property string tab: "rain"  // "rain" or "hours"
   readonly property var info: Model.summary(points)
   // Bar text; empty until the first good response, which hides the widget.
   readonly property string label: {
@@ -46,6 +50,8 @@ Panel {
     if (points.length && Date.now() - pointsAt > 15 * 60 * 1000) points = []
     if (!rainProc.running) { rainProc.key = locationKey; rainProc.running = true }
     if (!feedProc.running) { feedProc.key = locationKey; feedProc.running = true }
+    if (idKey !== locationKey) { if (!idProc.running) { idProc.key = locationKey; idProc.running = true } }
+    else if (locationId && !hourlyProc.running) { hourlyProc.key = locationKey; hourlyProc.running = true }
   }
 
   // Each fetch remembers the location it was started for; results for an older place are dropped.
@@ -102,6 +108,40 @@ Panel {
         if (root.stale(feedProc)) return
         var parsed = Model.parseFeed(text, root.latitude, root.longitude, Qt.formatDate(new Date(), "yyyy-MM-dd"))
         if (parsed) root.weather = parsed
+      }
+    }
+  }
+
+  // The hourly forecast needs a Buienradar place id: search by place name, keep the nearest hit.
+  Process {
+    id: idProc
+    property string key
+    command: ["curl", "-fsS", "--max-time", "10",
+      "https://location.buienradar.nl/1.1/location/search?query=" + encodeURIComponent(root.placeName || "Amsterdam")]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        if (root.stale(idProc)) return
+        var id = Model.parseLocationId(text, root.latitude, root.longitude)
+        if (!id) return   // try again on the next refresh
+        root.locationId = id
+        root.idKey = idProc.key
+        root.hourly = []
+        root.refresh()
+      }
+    }
+  }
+
+  Process {
+    id: hourlyProc
+    property string key
+    command: ["curl", "-fsS", "--max-time", "10", "https://forecast.buienradar.nl/2.0/forecast/" + root.locationId]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        if (root.stale(hourlyProc)) return
+        var parsed = Model.parseHourly(text, Date.now())
+        if (parsed.length) root.hourly = parsed
       }
     }
   }
@@ -369,89 +409,245 @@ Panel {
             }
           }
 
-          // ---- Rain, next 2 hours.
-          Column {
-            width: parent.width
-            spacing: Style.space(4)
-            Label { text: "Rain · next 2 hours"; color: root.dim; font.pixelSize: Style.font.bodySmall }
-            Label { text: root.info.title || "No rain data"; font.pixelSize: Style.font.title; font.bold: true }
-            Label { visible: text !== ""; text: root.info.sub; color: Commons.Color.accent }
+          // ---- Tabs: rain for the next 2 hours, or the next 24 hours.
+          Row {
+            spacing: Style.space(18)
+            Repeater {
+              model: [["rain", "RAIN 2H"], ["hours", "24 HOURS"]]
+              Label {
+                text: modelData[1]
+                color: root.tab === modelData[0] ? root.fg : root.dim
+                font.bold: root.tab === modelData[0]
+                font.letterSpacing: 1
+                font.pixelSize: Style.font.bodySmall
+                MouseArea {
+                  anchors.fill: parent
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: root.tab = modelData[0]
+                }
+              }
+            }
           }
 
-          Column {
-            id: graphBlock
+          // Both tabs share this box, so the popup keeps its size.
+          // The rain graph bottom lines up with the map bottom; its axis sits beside the source caption.
+          Item {
+            id: tabArea
             width: parent.width
-            spacing: Style.space(6)
+            height: Math.max(Style.space(220), radar.height - y + Style.space(6 + 14))
 
-            Canvas {
-              id: graph
-              width: parent.width
-              // Graph bottom lines up with the map bottom; the axis sits beside the source caption.
-              height: Math.max(Style.space(120), radar.height - graphBlock.y)
-              // Repaint when the data or the theme colors change.
-              readonly property var watch: [root.points, root.fg, root.dim, Commons.Color.accent]
-              onWatchChanged: requestPaint()
-              onPaint: {
-                var ctx = getContext("2d")
-                ctx.reset()
-                var pts = root.points
-                if (pts.length < 2) return
-                function y(mm) { return height - 4 - Model.scale(mm) * (height - 8) }
+            Column {
+              anchors.fill: parent
+              visible: root.tab === "rain"
+              spacing: Style.space(16)
 
-                ctx.strokeStyle = Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.12)
-                ctx.setLineDash([3, 4])
-                ;[Model.MODERATE, Model.HEAVY].forEach(function (mm) {
-                  ctx.beginPath(); ctx.moveTo(0, y(mm)); ctx.lineTo(width, y(mm)); ctx.stroke()
-                })
-                ctx.setLineDash([])
-
-                ctx.beginPath()
-                for (var j = 0; j < pts.length; ++j) {
-                  var x = j * width / (pts.length - 1)
-                  if (j === 0) ctx.moveTo(x, y(pts[j].mm)); else ctx.lineTo(x, y(pts[j].mm))
-                }
-                ctx.lineWidth = 2
-                ctx.strokeStyle = root.rainColor
-                ctx.stroke()
-                ctx.lineTo(width, height); ctx.lineTo(0, height); ctx.closePath()
-                ctx.fillStyle = Qt.rgba(root.rainColor.r, root.rainColor.g, root.rainColor.b, 0.18)
-                ctx.fill()
-
-                // Level names, each centred in its own band.
-                ctx.font = Style.font.caption + "px \"" + (root.bar ? root.bar.fontFamily : "monospace") + "\""
-                ctx.fillStyle = root.dim
-                ctx.textAlign = "right"
-                ctx.textBaseline = "middle"
-                ctx.fillText("light", width - 2, (y(0.1) + y(Model.MODERATE)) / 2)
-                ctx.fillText("moderate", width - 2, (y(Model.MODERATE) + y(Model.HEAVY)) / 2)
-                ctx.fillText("heavy", width - 2, (y(Model.HEAVY) + 4) / 2)
+              // ---- Rain, next 2 hours.
+              Column {
+                id: rainHead
+                width: parent.width
+                spacing: Style.space(4)
+                Label { text: root.info.title || "No rain data"; font.pixelSize: Style.font.title; font.bold: true }
+                Label { visible: text !== ""; text: root.info.sub; color: Commons.Color.accent }
               }
 
-              // Time of the radar frame on screen; hidden if that time is not on the graph.
-              Rectangle {
-                id: cursor
-                readonly property string time: Model.frameTime(root.radarStart, radar.currentFrame)
-                readonly property int idx: root.points.findIndex(function (p) { return p.time === cursor.time })
-                visible: idx >= 0 && root.points.length > 1
-                x: idx * (parent.width - width) / (root.points.length - 1)
-                width: 2
-                height: parent.height
-                color: Commons.Color.accent
+              Column {
+                id: graphBlock
+                width: parent.width
+                spacing: Style.space(6)
+
+                Canvas {
+                  id: graph
+                  width: parent.width
+                  height: Math.max(Style.space(120), tabArea.height - rainHead.height - Style.space(16 + 6 + 14))
+                  // Repaint when the data or the theme colors change.
+                  readonly property var watch: [root.points, root.fg, root.dim, Commons.Color.accent]
+                  onWatchChanged: requestPaint()
+                  onPaint: {
+                    var ctx = getContext("2d")
+                    ctx.reset()
+                    var pts = root.points
+                    if (pts.length < 2) return
+                    function y(mm) { return height - 4 - Model.scale(mm) * (height - 8) }
+
+                    ctx.strokeStyle = Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.12)
+                    ctx.setLineDash([3, 4])
+                    ;[Model.MODERATE, Model.HEAVY].forEach(function (mm) {
+                      ctx.beginPath(); ctx.moveTo(0, y(mm)); ctx.lineTo(width, y(mm)); ctx.stroke()
+                    })
+                    ctx.setLineDash([])
+
+                    ctx.beginPath()
+                    for (var j = 0; j < pts.length; ++j) {
+                      var x = j * width / (pts.length - 1)
+                      if (j === 0) ctx.moveTo(x, y(pts[j].mm)); else ctx.lineTo(x, y(pts[j].mm))
+                    }
+                    ctx.lineWidth = 2
+                    ctx.strokeStyle = root.rainColor
+                    ctx.stroke()
+                    ctx.lineTo(width, height); ctx.lineTo(0, height); ctx.closePath()
+                    ctx.fillStyle = Qt.rgba(root.rainColor.r, root.rainColor.g, root.rainColor.b, 0.18)
+                    ctx.fill()
+
+                    // Level names, each centred in its own band.
+                    ctx.font = Style.font.caption + "px \"" + (root.bar ? root.bar.fontFamily : "monospace") + "\""
+                    ctx.fillStyle = root.dim
+                    ctx.textAlign = "right"
+                    ctx.textBaseline = "middle"
+                    ctx.fillText("light", width - 2, (y(0.1) + y(Model.MODERATE)) / 2)
+                    ctx.fillText("moderate", width - 2, (y(Model.MODERATE) + y(Model.HEAVY)) / 2)
+                    ctx.fillText("heavy", width - 2, (y(Model.HEAVY) + 4) / 2)
+                  }
+
+                  // Time of the radar frame on screen; hidden if that time is not on the graph.
+                  Rectangle {
+                    id: cursor
+                    readonly property string time: Model.frameTime(root.radarStart, radar.currentFrame)
+                    readonly property int idx: root.points.findIndex(function (p) { return p.time === cursor.time })
+                    visible: idx >= 0 && root.points.length > 1
+                    x: idx * (parent.width - width) / (root.points.length - 1)
+                    width: 2
+                    height: parent.height
+                    color: Commons.Color.accent
+                  }
+                }
+
+                Item {
+                  width: parent.width
+                  height: Style.space(14)
+                  Repeater {
+                    // now, then four evenly spaced times to the end of the forecast.
+                    model: root.points.length ? [0, 0.25, 0.5, 0.75, 1] : []
+                    Label {
+                      readonly property int idx: Math.round(modelData * (root.points.length - 1))
+                      x: modelData * (parent.width - width)
+                      text: idx === 0 ? "now" : root.points[idx].time
+                      color: root.dim
+                      font.pixelSize: Style.font.caption
+                    }
+                  }
+                }
               }
             }
 
-            Item {
-              width: parent.width
-              height: Style.space(14)
-              Repeater {
-                // now, then four evenly spaced times to the end of the forecast.
-                model: root.points.length ? [0, 0.25, 0.5, 0.75, 1] : []
-                Label {
-                  readonly property int idx: Math.round(modelData * (root.points.length - 1))
-                  x: modelData * (parent.width - width)
-                  text: idx === 0 ? "now" : root.points[idx].time
-                  color: root.dim
-                  font.pixelSize: Style.font.caption
+            // ---- Next 24 hours: icon, hour and temperature every 3 hours over a
+            // temperature line and rain chance bars.
+            Column {
+              id: hourTab
+              anchors.fill: parent
+              visible: root.tab === "hours"
+              spacing: Style.space(6)
+              readonly property var hrs: root.hourly
+              // x of hour i on the chart.
+              function xAt(i, w) { return hrs.length > 1 ? i * w / (hrs.length - 1) : 0 }
+
+              Label { visible: hourTab.hrs.length === 0; text: "No hourly data"; font.pixelSize: Style.font.title; font.bold: true }
+
+              Item {
+                id: hourLabels
+                width: parent.width
+                height: Style.space(50)
+                Repeater {
+                  model: hourTab.hrs.filter(function (h, i) { return i % 3 === 0 })
+                  Column {
+                    x: Math.max(0, Math.min(parent.width - width, hourTab.xAt(index * 3, parent.width) - width / 2))
+                    spacing: Style.space(2)
+                    Label { anchors.horizontalCenter: parent.horizontalCenter; text: modelData.glyph; font.pixelSize: 22 }
+                    Label { anchors.horizontalCenter: parent.horizontalCenter; text: Math.round(modelData.temp) + "°"; font.pixelSize: Style.font.bodySmall }
+                  }
+                }
+              }
+
+              Canvas {
+                id: hourChart
+                width: parent.width
+                height: parent.height - hourLabels.height - hourAxis.height - 2 * parent.spacing
+                readonly property var watch: [root.hourly, root.fg, root.dim]
+                onWatchChanged: requestPaint()
+                onPaint: {
+                  var ctx = getContext("2d")
+                  ctx.reset()
+                  var hs = hourTab.hrs
+                  if (hs.length < 2) return
+                  var temps = hs.map(function (h) { return h.temp })
+                  var lo = Math.min.apply(null, temps), hi = Math.max.apply(null, temps)
+                  // Whole-degree levels, 2 to 5 of them; the range is padded to the outer levels.
+                  var step = hi - lo <= 3 ? 1 : hi - lo <= 8 ? 2 : 5
+                  lo = Math.floor(lo / step) * step
+                  hi = Math.max(Math.ceil(hi / step) * step, lo + step)
+                  // Two panels with a gap: temperature on top, rain chance below.
+                  var cap = Style.font.caption
+                  var tTop = cap + 10, tBottom = height * 0.56
+                  var rTop = height * 0.70, rH = height - rTop
+                  function x(i) { return hourTab.xAt(i, width) }
+                  function ty(t) { return tTop + (1 - (t - lo) / (hi - lo)) * (tBottom - tTop) }
+                  function ry(pct) { return height - pct / 100 * rH }
+                  var grid = Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.12)
+
+                  // Rain panel background, so it reads as its own chart.
+                  ctx.fillStyle = Qt.rgba(root.rainColor.r, root.rainColor.g, root.rainColor.b, 0.07)
+                  ctx.fillRect(0, rTop, width, rH)
+
+                  // Hour lines every 3 hours, inside each panel only.
+                  ctx.strokeStyle = grid
+                  for (var i = 3; i < hs.length; i += 3) {
+                    ctx.beginPath(); ctx.moveTo(x(i), tTop - 4); ctx.lineTo(x(i), tBottom); ctx.stroke()
+                    ctx.beginPath(); ctx.moveTo(x(i), rTop); ctx.lineTo(x(i), height); ctx.stroke()
+                  }
+
+                  ctx.font = cap + "px \"" + (root.bar ? root.bar.fontFamily : "monospace") + "\""
+                  ctx.textBaseline = "bottom"
+                  // Panel titles.
+                  ctx.textAlign = "left"
+                  ctx.fillStyle = root.dim
+                  ctx.fillText("TEMPERATURE", 0, cap + 2)
+                  ctx.fillStyle = root.rainColor
+                  ctx.fillText("RAIN CHANCE", 0, rTop - 4)
+
+                  // Level lines with their values on the right.
+                  ctx.fillStyle = root.dim
+                  ctx.textAlign = "right"
+                  ctx.setLineDash([3, 4])
+                  function level(y, text) {
+                    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke()
+                    ctx.fillText(text, width - 2, y - 1)
+                  }
+                  for (var t = lo; t <= hi; t += step) level(ty(t), t + "°")
+                  level(ry(50), "50%")
+                  level(ry(100), "100%")
+                  ctx.setLineDash([])
+
+                  ctx.fillStyle = Qt.rgba(root.rainColor.r, root.rainColor.g, root.rainColor.b, 0.7)
+                  var bw = width / hs.length * 0.7
+                  hs.forEach(function (h, i) {
+                    var bh = h.chance / 100 * rH
+                    if (bh > 0) ctx.fillRect(Math.max(0, Math.min(width - bw, x(i) - bw / 2)), height - bh, bw, bh)
+                  })
+                  ctx.strokeStyle = grid
+                  ctx.beginPath(); ctx.moveTo(0, height - 0.5); ctx.lineTo(width, height - 0.5); ctx.stroke()
+
+                  ctx.beginPath()
+                  hs.forEach(function (h, i) {
+                    var y = ty(h.temp)
+                    if (i === 0) ctx.moveTo(x(i), y); else ctx.lineTo(x(i), y)
+                  })
+                  ctx.lineWidth = 2
+                  ctx.strokeStyle = root.fg
+                  ctx.stroke()
+                }
+              }
+
+              Item {
+                id: hourAxis
+                width: parent.width
+                height: Style.space(14)
+                Repeater {
+                  model: hourTab.hrs.filter(function (h, i) { return i % 3 === 0 })
+                  Label {
+                    x: Math.max(0, Math.min(parent.width - width, hourTab.xAt(index * 3, parent.width) - width / 2))
+                    text: index === 0 ? "now" : modelData.hour + ":00"
+                    color: root.dim
+                    font.pixelSize: Style.font.caption
+                  }
                 }
               }
             }
